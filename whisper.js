@@ -32,10 +32,24 @@ asrButton.addEventListener('click',async()=>{
   const duration=decoded.duration;
   // Downmix via OfflineAudioContext to 16 kHz; bounded to ten minutes in this version.
   asrSay('Préparation audio 16 kHz…');
-  const offline=new OfflineAudioContext(1,Math.ceil(duration*sr),sr);
-  const src=offline.createBufferSource();src.buffer=decoded;
-  src.connect(offline.destination);src.start(0);
-  const mono=(await offline.startRendering()).getChannelData(0);
+  // Explicit mono mixing and resampling avoids Safari OfflineAudioContext inconsistencies.
+  const sourceRate=decoded.sampleRate;
+  const sourceLength=decoded.length;
+  const outputLength=Math.round(sourceLength*sr/sourceRate);
+  const mono=new Float32Array(outputLength);
+  const channels=decoded.numberOfChannels;
+  const data=Array.from({length:channels},(_,i)=>decoded.getChannelData(i));
+  for(let i=0;i<outputLength;i++){
+   const pos=i*sourceRate/sr,lo=Math.min(sourceLength-1,Math.floor(pos)),hi=Math.min(sourceLength-1,lo+1),fraction=pos-lo;
+   let sample=0;
+   for(let c=0;c<channels;c++)sample+=data[c][lo]*(1-fraction)+data[c][hi]*fraction;
+   mono[i]=sample/channels;
+  }
+  let energy=0,peak=0;
+  for(let i=0;i<mono.length;i++){energy+=mono[i]*mono[i];peak=Math.max(peak,Math.abs(mono[i]));}
+  const rms=Math.sqrt(energy/Math.max(1,mono.length));
+  if(rms<0.002)throw Error('Signal trop faible ou silencieux. Vérifiez la lecture de l’enregistrement avant transcription.');
+  asrSay('Signal vérifié : '+sourceRate+' Hz → 16000 Hz, '+channels+' canal(aux), niveau '+Math.round(20*Math.log10(rms))+' dBFS.');
   const total=Math.ceil(mono.length/frame);
   let textSoFar='';
   if(meeting.transcript && !confirm('Remplacer la transcription existante par une nouvelle transcription ?')){asrSay('Transcription annulée.');return;}
@@ -51,6 +65,9 @@ asrButton.addEventListener('click',async()=>{
    options.max_new_tokens=128;
    const result=await asrPipeline(segment,options);
    const words=(result.text||'').trim();
+   const wordCount=words.split(/\\s+/).filter(Boolean).length;
+   const seconds=segment.length/sr;
+   if(wordCount>seconds*3.5+10){asrSay('Résultat incohérent : trop de mots pour la durée. Aucun texte enregistré pour ce segment.');continue;}
    const phrases=words.split(/[.!?]+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
    const repeated=phrases.some(p=>phrases.filter(q=>q===p).length>=3);
    if(repeated){asrSay('Transcription suspecte : répétitions détectées. Résultat non enregistré.');continue;}
@@ -60,7 +77,7 @@ asrButton.addEventListener('click',async()=>{
     if(current===meetingId)document.getElementById('transcript').value=textSoFar;
    }
   }
-  asrSay(asrCancel?'Arrêt effectué. Les segments terminés sont enregistrés.':'Transcription terminée et enregistrée.');
+  asrSay(asrCancel?'Arrêt demandé.':textSoFar?'Transcription enregistrée (résultat expérimental à vérifier).':'Aucun texte fiable obtenu. Vérifiez le fichier audio et essayez un autre modèle.');
  }catch(e){asrSay('Échec : '+(e?.message||String(e))+' — modèle ou mémoire potentiellement incompatibles avec Safari.')}
  finally{if(ctx)await ctx.close().catch(()=>{});asrBusy=false;asrButton.disabled=false;asrStop.disabled=true}
 });
