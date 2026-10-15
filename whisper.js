@@ -1,5 +1,5 @@
 // Whisper browser proof of concept. Model downloads once; browser cache availability varies.
-let asrBusy=false,asrCancel=false,asrPipeline=null;
+let asrBusy=false,asrCancel=false,asrPipeline=null,asrLoadedModel=null;
 const asrButton=document.getElementById('transcribe');
 const asrStop=document.getElementById('cancelTranscribe');
 const asrMessage=document.getElementById('asrStatus');
@@ -19,10 +19,14 @@ asrButton.addEventListener('click',async()=>{
   const decoded=await ctx.decodeAudioData(bytes);
   if(decoded.duration>600)throw Error('Cette version expérimentale accepte au maximum 10 minutes. Pour une réunion d’une heure, conservez l’audio et attendez la version optimisée.');
   asrSay('Chargement du moteur Whisper : le premier téléchargement peut être long…');
-  if(!asrPipeline){
+  const modelChoice=document.getElementById('asrModel').value;
+  const languageChoice=document.getElementById('asrLang').value;
+  if(!asrPipeline||asrLoadedModel!==modelChoice){
+   asrPipeline=null;
    const lib=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
    lib.env.allowLocalModels=false;
-   asrPipeline=await lib.pipeline('automatic-speech-recognition','onnx-community/whisper-tiny',{device:'wasm',dtype:'q8',progress_callback:p=>{if(p.status==='progress')asrSay('Téléchargement du modèle : '+Math.round(p.progress||0)+' %')}});
+   asrPipeline=await lib.pipeline('automatic-speech-recognition','onnx-community/whisper-'+modelChoice,{device:'wasm',dtype:'q8',progress_callback:p=>{if(p.status==='progress')asrSay('Téléchargement du modèle : '+Math.round(p.progress||0)+' %')}});
+   asrLoadedModel=modelChoice;
   }
   const sr=16000,frame=25*sr;
   const duration=decoded.duration;
@@ -33,12 +37,15 @@ asrButton.addEventListener('click',async()=>{
   src.connect(offline.destination);src.start(0);
   const mono=(await offline.startRendering()).getChannelData(0);
   const total=Math.ceil(mono.length/frame);
-  let textSoFar=meeting.transcript||'';
+  let textSoFar='';
+  if(meeting.transcript && !confirm('Remplacer la transcription existante par une nouvelle transcription ?')){asrSay('Transcription annulée.');return;}
   for(let i=0;i<total;i++){
    if(asrCancel)break;
    asrSay('Transcription locale : segment '+(i+1)+' / '+total+'. Gardez Safari ouvert.');
    const segment=mono.slice(i*frame,Math.min((i+1)*frame,mono.length));
-   const result=await asrPipeline(segment,{language:'french',task:'transcribe'});
+   const options={task:'transcribe'};
+   if(languageChoice!=='auto')options.language=languageChoice;
+   const result=await asrPipeline(segment,options);
    const words=(result.text||'').trim();
    if(words){
     textSoFar+=(textSoFar?'\n':'')+'['+Math.floor(i*25/60).toString().padStart(2,'0')+':'+String(i*25%60).padStart(2,'0')+'] '+words;
