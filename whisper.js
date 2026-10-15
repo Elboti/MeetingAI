@@ -45,8 +45,15 @@ asrButton.addEventListener('click',async()=>{
    const segment=mono.slice(i*frame,Math.min((i+1)*frame,mono.length));
    const options={task:'transcribe'};
    if(languageChoice!=='auto')options.language=languageChoice;
+   options.condition_on_prev_tokens=false;
+   options.no_repeat_ngram_size=4;
+   options.repetition_penalty=1.15;
+   options.max_new_tokens=128;
    const result=await asrPipeline(segment,options);
    const words=(result.text||'').trim();
+   const phrases=words.split(/[.!?]+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+   const repeated=phrases.some(p=>phrases.filter(q=>q===p).length>=3);
+   if(repeated){asrSay('Transcription suspecte : répétitions détectées. Résultat non enregistré.');continue;}
    if(words){
     textSoFar+=(textSoFar?'\n':'')+'['+Math.floor(i*25/60).toString().padStart(2,'0')+':'+String(i*25%60).padStart(2,'0')+'] '+words;
     const latest=await get(meetingId);latest.transcript=textSoFar;await save(latest);
