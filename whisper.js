@@ -48,7 +48,11 @@ asrButton.addEventListener('click',async()=>{
   let energy=0,peak=0;
   for(let i=0;i<mono.length;i++){energy+=mono[i]*mono[i];peak=Math.max(peak,Math.abs(mono[i]));}
   const rms=Math.sqrt(energy/Math.max(1,mono.length));
-  if(rms<0.002)throw Error('Signal trop faible ou silencieux. Vérifiez la lecture de l’enregistrement avant transcription.');
+  if(rms<0.0001)throw Error('Signal silencieux : transcription impossible.');
+  // Normalize quiet speech to approximately -20 dBFS, without clipping.
+  const gain=Math.min(0.85/Math.max(peak,0.000001),0.1/Math.max(rms,0.000001),30);
+  if(gain>1.01){for(let i=0;i<mono.length;i++)mono[i]*=gain;}
+  asrSay('Niveau audio original : '+Math.round(20*Math.log10(rms))+' dBFS. Gain appliqué : '+gain.toFixed(1)+'×.');
   asrSay('Signal vérifié : '+sourceRate+' Hz → 16000 Hz, '+channels+' canal(aux), niveau '+Math.round(20*Math.log10(rms))+' dBFS.');
   const total=Math.ceil(mono.length/frame);
   let textSoFar='';
