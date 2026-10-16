@@ -1,6 +1,10 @@
 name: Build Whisper Q8 browser engine
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-whisper-q8.yml'
 permissions:
   contents: write
 jobs:
