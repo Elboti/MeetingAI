@@ -21,11 +21,15 @@ asrButton.addEventListener('click',async()=>{
   asrSay('Chargement du moteur Whisper : le premier téléchargement peut être long…');
   const modelChoice=document.getElementById('asrModel').value;
   const languageChoice=document.getElementById('asrLang').value;
+  if(modelChoice==='large-v3-turbo' && !confirm('Large V3 Turbo est très volumineux et peut provoquer le rechargement de Safari sur iPhone. Les résultats ne sont pas garantis. Continuer ?')){asrSay('Test haute qualité annulé.');return;}
   if(!asrPipeline||asrLoadedModel!==modelChoice){
    asrPipeline=null;
    const lib=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1');
    lib.env.allowLocalModels=false;
-   asrPipeline=await lib.pipeline('automatic-speech-recognition','onnx-community/whisper-'+modelChoice,{device:'wasm',dtype:'q8',progress_callback:p=>{if(p.status==='progress')asrSay('Téléchargement du modèle : '+Math.round(p.progress||0)+' %')}});
+   const highQuality=modelChoice==='large-v3-turbo';
+   const device=highQuality && navigator.gpu?'webgpu':'wasm';
+   const dtype=highQuality && device==='webgpu'?{encoder_model:'fp16',decoder_model_merged:'q4'}:'q8';
+   asrPipeline=await lib.pipeline('automatic-speech-recognition','onnx-community/whisper-'+modelChoice,{device,dtype,progress_callback:p=>{if(p.status==='progress')asrSay('Téléchargement du modèle : '+Math.round(p.progress||0)+' %')}});
    asrLoadedModel=modelChoice;
   }
   const sr=16000,frame=25*sr;
