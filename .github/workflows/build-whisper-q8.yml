@@ -14,7 +14,7 @@ jobs:
       - name: Build whisper.cpp WebAssembly
         run: |
           git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git upstream-whisper
-          cmake -S upstream-whisper -B upstream-whisper/build-wasm -DCMAKE_BUILD_TYPE=Release -DWHISPER_WASM_SINGLE_FILE=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE="$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"
+          emcmake cmake -S upstream-whisper -B upstream-whisper/build-wasm -DCMAKE_BUILD_TYPE=Release -DWHISPER_WASM_SINGLE_FILE=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON
           cmake --build upstream-whisper/build-wasm -j 2
       - name: Stage browser engine
         run: |
