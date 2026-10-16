@@ -1,0 +1,32 @@
+name: Build Whisper Q8 browser engine
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.74'
+      - name: Build whisper.cpp WebAssembly
+        run: |
+          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git upstream-whisper
+          cmake -S upstream-whisper -B upstream-whisper/build-wasm -DCMAKE_BUILD_TYPE=Release -DWHISPER_WASM_SINGLE_FILE=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON -DCMAKE_TOOLCHAIN_FILE="$EMSDK/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake"
+          cmake --build upstream-whisper/build-wasm -j 2
+      - name: Stage browser engine
+        run: |
+          mkdir -p q8-engine
+          cp -R upstream-whisper/build-wasm/bin/whisper.wasm/. q8-engine/
+          cp upstream-whisper/build-wasm/bin/libmain.js q8-engine/
+          if test -f upstream-whisper/build-wasm/bin/libmain.worker.js; then cp upstream-whisper/build-wasm/bin/libmain.worker.js q8-engine/; fi
+          if test -f upstream-whisper/build-wasm/bin/libmain.wasm; then cp upstream-whisper/build-wasm/bin/libmain.wasm q8-engine/; fi
+          test -f q8-engine/index.html
+      - name: Commit compiled assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add q8-engine
+          git diff --cached --quiet || (git commit -m "Build whisper.cpp browser engine" && git push)
