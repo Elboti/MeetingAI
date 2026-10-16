@@ -17,12 +17,13 @@ jobs:
           version: '3.1.74'
       - name: Build whisper.cpp WebAssembly
         run: |
-          git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git upstream-whisper
+          git clone --depth 1 --branch v1.9.4 https://github.com/ggml-org/whisper.cpp.git upstream-whisper
           emcmake cmake -S upstream-whisper -B upstream-whisper/build-wasm -DCMAKE_BUILD_TYPE=Release -DWHISPER_WASM_SINGLE_FILE=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON
           cmake --build upstream-whisper/build-wasm -j 2
       - name: Stage browser engine
         run: |
           mkdir -p q8-engine
+          test -f upstream-whisper/build-wasm/bin/whisper.wasm/index.html
           cp -R upstream-whisper/build-wasm/bin/whisper.wasm/. q8-engine/
           cp upstream-whisper/build-wasm/bin/libmain.js q8-engine/
           if test -f upstream-whisper/build-wasm/bin/libmain.worker.js; then cp upstream-whisper/build-wasm/bin/libmain.worker.js q8-engine/; fi
